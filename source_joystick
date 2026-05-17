@@ -41,6 +41,8 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "BlackDynamicJoystick"
 ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = -10
 ScreenGui.Enabled = isEnabled
 
 local CaptureArea = Instance.new("Frame", ScreenGui)
@@ -48,13 +50,15 @@ CaptureArea.Name = "CaptureArea"
 CaptureArea.Size = UDim2.new(0.5, 0, 1, 0)
 CaptureArea.Position = UDim2.new(0, 0, 0, 0)
 CaptureArea.BackgroundTransparency = 1
-CaptureArea.Active = false 
+CaptureArea.Active = true
+CaptureArea.ZIndex = 1
 
 local Base = Instance.new("Frame", ScreenGui)
 Base.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Base.BackgroundTransparency = 0.85
 Base.Size = UDim2.new(0, 40, 0, 40)
 Base.Visible = false
+Base.ZIndex = 10
 Instance.new("UICorner", Base).CornerRadius = UDim.new(1, 0)
 
 local dots = {}
@@ -64,6 +68,7 @@ for i = 1, 6 do
     dot.BackgroundTransparency = 0.95 - (i * 0.05)
     dot.Size = UDim2.new(0, 6 + (i * 2), 0, 6 + (i * 2))
     dot.Visible = false
+    dot.ZIndex = 9
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
     table.insert(dots, dot)
 end
@@ -73,16 +78,17 @@ Stick.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Stick.BackgroundTransparency = 0.5
 Stick.Size = UDim2.new(0, 45, 0, 45)
 Stick.Visible = false
-Stick.ZIndex = 5
+Stick.ZIndex = 11
 Instance.new("UICorner", Stick).CornerRadius = UDim.new(1, 0)
 
 local JumpButton = Instance.new("TextButton", ScreenGui)
 JumpButton.Name = "CustomJumpButton"
 JumpButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 JumpButton.BackgroundTransparency = 0.5
-JumpButton.Position = UDim2.new(1, -95, 1, -95) 
+JumpButton.Position = UDim2.new(1, -95, 1, -95)
 JumpButton.Size = UDim2.new(0, 70, 0, 70)
 JumpButton.Text = ""
+JumpButton.ZIndex = 10
 Instance.new("UICorner", JumpButton).CornerRadius = UDim.new(1, 0)
 
 local ArrowIcon = Instance.new("Frame", JumpButton)
@@ -102,19 +108,11 @@ Stem.Position = UDim2.new(0.5, 0, 0.6, 0)
 Stem.AnchorPoint = Vector2.new(0.5, 0)
 Stem.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 
-local function setStandardControls(visible)
-    pcall(function()
-        local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
-        if touchGui then touchGui.Enabled = visible end
-    end)
-end
-
 local function toggleSystem(state)
     if not state then showNotification("Wait...") end
     isEnabled = state
     ScreenGui.Enabled = state
     saveSetting(state)
-    setStandardControls(not state)
 end
 
 Player.Chatted:Connect(function(msg)
@@ -127,120 +125,111 @@ local dragging = false
 local inputObject = nil
 local moveVector = Vector3.new(0, 0, 0)
 local startPos = Vector2.new(0, 0)
+local movedOnce = false
 
-JumpButton.InputBegan:Connect(function(input, gameProcessed)
-    if isEnabled and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
-        if input.UserInputType == Enum.UserInputType.MouseButton1 and gameProcessed then return end
-        
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+-- Прыжок через Humanoid, не через VirtualInputManager
+JumpButton.MouseButton1Down:Connect(function()
+    if isEnabled then
+        local char = Player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.Jump = true
+            end
+        end
         JumpButton.BackgroundTransparency = 0.3
     end
 end)
 
-JumpButton.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-        JumpButton.BackgroundTransparency = 0.5
+JumpButton.MouseButton1Up:Connect(function()
+    JumpButton.BackgroundTransparency = 0.5
+end)
+
+CaptureArea.InputBegan:Connect(function(input)
+    if not isEnabled then return end
+    if dragging then return end
+    if input.UserInputType ~= Enum.UserInputType.Touch
+        and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+
+    dragging = true
+    movedOnce = false
+    inputObject = input
+    startPos = Vector2.new(input.Position.X, input.Position.Y)
+    Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
+
+    -- Сразу ставим Stick на правильную позицию
+    Stick.Position = UDim2.new(0, startPos.X - 22.5, 0, startPos.Y - 22.5)
+
+    Base.Visible = true
+    Stick.Visible = true
+    for _, d in pairs(dots) do
+        d.Position = UDim2.new(0, startPos.X - (d.Size.X.Offset/2), 0, startPos.Y - (d.Size.Y.Offset/2))
+        d.Visible = true
     end
 end)
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not isEnabled or gameProcessed then return end
-    
-    local isMobile = UserInputService.TouchEnabled
-    if isMobile and input.UserInputType == Enum.UserInputType.MouseButton1 then
-        return
-    end
-    
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local xXZone = UserInputService.ViewportSize.X * 0.5
-        if input.Position.X <= xXZone then
-            dragging = true
-            inputObject = input
-            startPos = Vector2.new(input.Position.X, input.Position.Y)
-            Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
-            Base.Visible = true
-            Stick.Visible = true
-            for _, d in pairs(dots) do d.Visible = true end
-        end
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input, gameProcessed)
+UserInputService.InputChanged:Connect(function(input)
     if isEnabled and dragging and input == inputObject then
         local currentPos = Vector2.new(input.Position.X, input.Position.Y)
         local diff = currentPos - startPos
+
+        if not movedOnce and diff.Magnitude > 2 then
+            movedOnce = true
+            CaptureArea.Active = false
+        end
+
         if diff.Magnitude > 0 then
             local direction = diff.Unit
-            
-            local maxRadius = 50
-            local targetClampedPos = diff
-            if diff.Magnitude > maxRadius then
-                targetClampedPos = direction * maxRadius
-            end
-            
-            local finalStickPos = startPos + targetClampedPos
-            Stick.Position = UDim2.new(0, finalStickPos.X - 22.5, 0, finalStickPos.Y - 22.5)
-            
+            Stick.Position = UDim2.new(0, currentPos.X - 22.5, 0, currentPos.Y - 22.5)
             for i, dot in pairs(dots) do
                 local ratio = i / 7
-                local dotPos = startPos + (targetClampedPos * ratio)
+                local dotPos = startPos + (diff * ratio)
                 dot.Position = UDim2.new(0, dotPos.X - (dot.Size.X.Offset/2), 0, dotPos.Y - (dot.Size.Y.Offset/2))
             end
-            
             moveVector = Vector3.new(direction.X, 0, direction.Y)
         end
     end
 end)
 
-local function endDrag(input)
-    if inputObject == input then
+UserInputService.InputEnded:Connect(function(input)
+    if input == inputObject then
         dragging = false
+        movedOnce = false
         inputObject = nil
-        moveVector = Vector3.new(0, 0, 0)
         Base.Visible = false
         Stick.Visible = false
         for _, d in pairs(dots) do d.Visible = false end
-        pcall(function()
-            if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-                Player.Character.Humanoid:Move(Vector3.new(0,0,0), true)
-            end
-        end)
-    end
-end
-
-UserInputService.InputEnded:Connect(function(input, gameProcessed)
-    if dragging and input == inputObject then
-        endDrag(input)
+        moveVector = Vector3.new(0, 0, 0)
+        CaptureArea.Active = true
     end
 end)
 
 RunService.RenderStepped:Connect(function()
-    if isEnabled and dragging and moveVector.Magnitude > 0 then
+    if isEnabled then
         pcall(function()
-            local character = Player.Character
-            if character then
-                local humanoid = character:FindFirstChild("Humanoid")
-                local camera = workspace.CurrentCamera
-                if humanoid and camera then
-                    local camLook = camera.CFrame.LookVector
-                    local camRight = camera.CFrame.RightVector
-                    
-                    camLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
-                    camRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
-                    
-                    local worldDirection = (camRight * moveVector.X) + (camLook * moveVector.Z)
-                    if worldDirection.Magnitude > 0 then
-                        worldDirection = worldDirection.Unit
-                    end
-                    
-                    humanoid:Move(worldDirection, false)
+            local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
+            if touchGui then
+                touchGui.Enabled = false
+                local frame = touchGui:FindFirstChild("TouchControlFrame")
+                if frame then
+                    local jump = frame:FindFirstChild("JumpButton")
+                    if jump then jump.Visible = false end
+                    local stick = frame:FindFirstChild("DynamicThumbstick")
+                    if stick then stick.Visible = false end
                 end
             end
         end)
     end
+
+    if isEnabled and Player.Character and Player.Character:FindFirstChild("Humanoid") then
+        Player.Character.Humanoid:Move(moveVector, true)
+    end
 end)
 
-if isEnabled then
-    setStandardControls(false)
-end
+task.spawn(function()
+    task.wait(1)
+    pcall(function()
+        local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
+        if touchGui then touchGui.Enabled = false end
+    end)
+end)
