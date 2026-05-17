@@ -43,7 +43,6 @@ ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Enabled = isEnabled
 
--- Оставляем только для визуального деления экрана, события на неё вешать не будем
 local CaptureArea = Instance.new("Frame", ScreenGui)
 CaptureArea.Name = "CaptureArea"
 CaptureArea.Size = UDim2.new(0.5, 0, 1, 0)
@@ -129,10 +128,8 @@ local inputObject = nil
 local moveVector = Vector3.new(0, 0, 0)
 local startPos = Vector2.new(0, 0)
 
--- Кнопка прыжка: игнорируем gameProcessed, так как сами шлем туда сигнал
 JumpButton.InputBegan:Connect(function(input, gameProcessed)
     if isEnabled and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
-        -- Проверяем, что это не наш собственный эмулированный клик зациклился
         if input.UserInputType == Enum.UserInputType.MouseButton1 and gameProcessed then return end
         
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
@@ -147,20 +144,15 @@ JumpButton.InputEnded:Connect(function(input)
     end
 end)
 
--- Глобальный перехват нажатий для джойстика
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not isEnabled then return end
-    if gameProcessed then return end
+    if not isEnabled or gameProcessed then return end
     
-    -- КРИТИЧЕСКИЙ ФИЛЬТР: На мобилках полностью игнорируем MouseButton1 (клики от VirtualInputManager)
-    -- Оставляем MouseButton1 только если тестируешь с ПК
     local isMobile = UserInputService.TouchEnabled
     if isMobile and input.UserInputType == Enum.UserInputType.MouseButton1 then
         return
     end
     
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        -- Проверяем, попало ли нажатие в левую половину экрана (зона джойстика)
         local xXZone = UserInputService.ViewportSize.X * 0.5
         if input.Position.X <= xXZone then
             dragging = true
@@ -226,26 +218,6 @@ end)
 RunService.RenderStepped:Connect(function()
     if isEnabled and dragging and moveVector.Magnitude > 0 then
         pcall(function()
-            local character = Player.Character
-            if character then
-                local humanoid = character:FindFirstChild("Humanoid")
-                local camera = workspace.CurrentCamera
-                if humanoid and camera then
-                    local camLook = camera.CFrame.LookVector
-                    local camRight = camera.CFrame.RightVector
-                    
-                    camLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
-                    camRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
-                    
-                    local worldDirection = (camRight * moveVector.X) + (camLook * moveVector.Z)
-                    if worldDirection.Magnitude > 0 then
-                        worldDirection = worldDirection.Unit
-                    end
-                    
-                    humanoid:Move(worldDirection, false)
-                end
-            end
-         pcall(function()
             local character = Player.Character
             if character then
                 local humanoid = character:FindFirstChild("Humanoid")
