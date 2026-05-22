@@ -7,12 +7,7 @@ local placeId = game.PlaceId
 local filePath = folderName .. "/" .. placeId .. ".txt"
 
 local imageFolderName = "Jump picture"
-local imageFileName = "jump.png"
-local imageFilePath = imageFolderName .. "/" .. imageFileName
-
 local joystickFolderName = "Joystick picture"
-local joystickFileName = "joystick.png"
-local joystickFilePath = joystickFolderName .. "/" .. joystickFileName
 
 if isfolder then
     if not isfolder(imageFolderName) then makefolder(imageFolderName) end
@@ -43,7 +38,8 @@ local function showNotification(text)
     task.delay(2, function() hint:Destroy() end)
 end
 
-local isEnabled = loadSetting()
+local clickBlockEnabled = loadSetting()
+local isSystemOn = true
 
 if Player.PlayerGui:FindFirstChild("BlackDynamicJoystick") then
     Player.PlayerGui.BlackDynamicJoystick:Destroy()
@@ -55,7 +51,7 @@ ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.DisplayOrder = -10
-ScreenGui.Enabled = isEnabled
+ScreenGui.Enabled = isSystemOn
 
 local CaptureArea = Instance.new("Frame", ScreenGui)
 CaptureArea.Name = "CaptureArea"
@@ -95,11 +91,22 @@ Stick.Visible = false
 Stick.ZIndex = 11
 Instance.new("UICorner", Stick).CornerRadius = UDim.new(1, 0)
 
+local function getFirstFileFromFolder(folder)
+    if listfiles and isfolder(folder) then
+        local files = listfiles(folder)
+        if #files > 0 then
+            return files[1]
+        end
+    end
+    return nil
+end
+
 task.spawn(function()
     while true do
-        if isfile and isfile(joystickFilePath) then
+        local file = getFirstFileFromFolder(joystickFolderName)
+        if file then
             local success, asset = pcall(function()
-                return getcustomasset(joystickFilePath)
+                return getcustomasset(file)
             end)
             if success and asset then
                 Stick.Image = asset
@@ -142,9 +149,10 @@ Stem.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 
 task.spawn(function()
     while true do
-        if isfile and isfile(imageFilePath) then
+        local file = getFirstFileFromFolder(imageFolderName)
+        if file then
             local success, asset = pcall(function()
-                return getcustomasset(imageFilePath)
+                return getcustomasset(file)
             end)
             if success and asset then
                 JumpButton.Image = asset
@@ -187,7 +195,7 @@ local function onJumpEnd()
 end
 
 JumpButton.MouseButton1Down:Connect(function()
-    if not isEnabled then return end
+    if not isSystemOn then return end
     JumpButton.BackgroundTransparency = 0.3
     JumpButton.ImageColor3 = Color3.fromRGB(180, 180, 180)
     onJumpStart()
@@ -224,18 +232,36 @@ end
 
 local function toggleSystem(state)
     if not state then showNotification("Wait...") end
-    isEnabled = state
+    isSystemOn = state
     ScreenGui.Enabled = state
-    saveSetting(state)
     if not state then
         setStandardControls(true)
+        dragging = false
+        movedOnce = false
+        inputObject = nil
+        Base.Visible = false
+        Stick.Visible = false
+        for _, d in pairs(dots) do d.Visible = false end
+        moveVector = Vector3.new(0, 0, 0)
+        CaptureArea.Active = true
     end
+end do
+    
 end
 
 Player.Chatted:Connect(function(msg)
     local m = msg:lower()
-    if m == "on" then toggleSystem(true)
-    elseif m == "off" then toggleSystem(false) end
+    if m == "on" then
+        toggleSystem(true)
+    elseif m == "off" then
+        toggleSystem(false)
+    elseif m == "wer" then
+        clickBlockEnabled = true
+        saveSetting(true)
+    elseif m == "rew" then
+        clickBlockEnabled = false
+        saveSetting(false)
+    end
 end)
 
 local dragging = false
@@ -244,8 +270,19 @@ local moveVector = Vector3.new(0, 0, 0)
 local startPos = Vector2.new(0, 0)
 local movedOnce = false
 
+local function updateJoystickVisuals(currentPos, diff)
+    local direction = diff.Unit
+    Stick.Position = UDim2.new(0, currentPos.X - 22.5, 0, currentPos.Y - 22.5)
+    for i, dot in pairs(dots) do
+        local ratio = i / 7
+        local dotPos = startPos + (diff * ratio)
+        dot.Position = UDim2.new(0, dotPos.X - (dot.Size.X.Offset/2), 0, dotPos.Y - (dot.Size.Y.Offset/2))
+    end
+    moveVector = Vector3.new(direction.X, 0, direction.Y)
+end
+
 CaptureArea.InputBegan:Connect(function(input)
-    if not isEnabled then return end
+    if not isSystemOn then return end
     if dragging then return end
     if input.UserInputType ~= Enum.UserInputType.Touch
         and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
@@ -254,35 +291,47 @@ CaptureArea.InputBegan:Connect(function(input)
     movedOnce = false
     inputObject = input
     startPos = Vector2.new(input.Position.X, input.Position.Y)
-    Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
-    Stick.Position = UDim2.new(0, startPos.X - 22.5, 0, startPos.Y - 22.5)
-    Base.Visible = true
-    Stick.Visible = true
-    for _, d in pairs(dots) do
-        d.Position = UDim2.new(0, startPos.X - (d.Size.X.Offset/2), 0, startPos.Y - (d.Size.Y.Offset/2))
-        d.Visible = true
+
+    if not clickBlockEnabled then
+        Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
+        Stick.Position = UDim2.new(0, startPos.X - 22.5, 0, startPos.Y - 22.5)
+        Base.Visible = true
+        Stick.Visible = true
+        for _, d in pairs(dots) do
+            d.Position = UDim2.new(0, startPos.X - (d.Size.X.Offset/2), 0, startPos.Y - (d.Size.Y.Offset/2))
+            d.Visible = true
+        end
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if isEnabled and dragging and input == inputObject then
+    if isSystemOn and dragging and input == inputObject then
         local currentPos = Vector2.new(input.Position.X, input.Position.Y)
         local diff = currentPos - startPos
 
-        if not movedOnce and diff.Magnitude > 2 then
-            movedOnce = true
-            CaptureArea.Active = false
-        end
-
-        if diff.Magnitude > 0 then
-            local direction = diff.Unit
-            Stick.Position = UDim2.new(0, currentPos.X - 22.5, 0, currentPos.Y - 22.5)
-            for i, dot in pairs(dots) do
-                local ratio = i / 7
-                local dotPos = startPos + (diff * ratio)
-                dot.Position = UDim2.new(0, dotPos.X - (dot.Size.X.Offset/2), 0, dotPos.Y - (dot.Size.Y.Offset/2))
+        if clickBlockEnabled then
+            if not movedOnce and diff.Magnitude > 10 then
+                movedOnce = true
+                CaptureArea.Active = false
+                Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
+                Base.Visible = true
+                Stick.Visible = true
+                for _, d in pairs(dots) do
+                    d.Position = UDim2.new(0, startPos.X - (d.Size.X.Offset/2), 0, startPos.Y - (d.Size.Y.Offset/2))
+                    d.Visible = true
+                end
             end
-            moveVector = Vector3.new(direction.X, 0, direction.Y)
+            if movedOnce and diff.Magnitude > 0 then
+                updateJoystickVisuals(currentPos, diff)
+            end
+        else
+            if not movedOnce and diff.Magnitude > 2 then
+                movedOnce = true
+                CaptureArea.Active = false
+            end
+            if diff.Magnitude > 0 then
+                updateJoystickVisuals(currentPos, diff)
+            end
         end
     end
 end)
@@ -301,7 +350,7 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 Stick.InputBegan:Connect(function(input)
-    if isEnabled and Stick.Image ~= "" and not dragging then
+    if isSystemOn and Stick.Image ~= "" and dragging and (not clickBlockEnabled or movedOnce) then
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             Stick.BackgroundTransparency = 0.3
             Stick.ImageColor3 = Color3.fromRGB(180, 180, 180)
@@ -319,7 +368,7 @@ Stick.InputEnded:Connect(function(input)
 end)
 
 RunService.RenderStepped:Connect(function()
-    if isEnabled then
+    if isSystemOn then
         pcall(function()
             local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
             if touchGui then
@@ -334,16 +383,16 @@ RunService.RenderStepped:Connect(function()
                 end
             end
         end)
-    end
 
-    if isEnabled and Player.Character and Player.Character:FindFirstChild("Humanoid") then
-        Player.Character.Humanoid:Move(moveVector, true)
+        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+            Player.Character.Humanoid:Move(moveVector, true)
+        end
     end
 end)
 
 task.spawn(function()
     task.wait(1)
-    if isEnabled then
+    if isSystemOn then
         pcall(function()
             local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
             if touchGui then touchGui.Enabled = false end
