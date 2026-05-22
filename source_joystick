@@ -6,6 +6,19 @@ local folderName = "joystick ID's"
 local placeId = game.PlaceId
 local filePath = folderName .. "/" .. placeId .. ".txt"
 
+local imageFolderName = "Jump picture"
+local imageFileName = "jump.png"
+local imageFilePath = imageFolderName .. "/" .. imageFileName
+
+local joystickFolderName = "Joystick picture"
+local joystickFileName = "joystick.png"
+local joystickFilePath = joystickFolderName .. "/" .. joystickFileName
+
+if isfolder then
+    if not isfolder(imageFolderName) then makefolder(imageFolderName) end
+    if not isfolder(joystickFolderName) then makefolder(joystickFolderName) end
+end
+
 local function loadSetting()
     if isfolder and isfile then
         if not isfolder(folderName) then makefolder(folderName) end
@@ -52,7 +65,8 @@ CaptureArea.BackgroundTransparency = 1
 CaptureArea.Active = true
 CaptureArea.ZIndex = 1
 
-local Base = Instance.new("Frame", ScreenGui)
+local Base = Instance.new("ImageLabel", ScreenGui)
+Base.Name = "CustomBase"
 Base.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Base.BackgroundTransparency = 0.85
 Base.Size = UDim2.new(0, 40, 0, 40)
@@ -62,7 +76,7 @@ Instance.new("UICorner", Base).CornerRadius = UDim.new(1, 0)
 
 local dots = {}
 for i = 1, 6 do
-    local dot = Instance.new("Frame", ScreenGui)
+    local dot = Instance.new("ImageLabel", ScreenGui)
     dot.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     dot.BackgroundTransparency = 0.95 - (i * 0.05)
     dot.Size = UDim2.new(0, 6 + (i * 2), 0, 6 + (i * 2))
@@ -72,7 +86,8 @@ for i = 1, 6 do
     table.insert(dots, dot)
 end
 
-local Stick = Instance.new("Frame", ScreenGui)
+local Stick = Instance.new("ImageButton", ScreenGui)
+Stick.Name = "CustomStick"
 Stick.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Stick.BackgroundTransparency = 0.5
 Stick.Size = UDim2.new(0, 45, 0, 45)
@@ -80,13 +95,31 @@ Stick.Visible = false
 Stick.ZIndex = 11
 Instance.new("UICorner", Stick).CornerRadius = UDim.new(1, 0)
 
-local JumpButton = Instance.new("TextButton", ScreenGui)
+task.spawn(function()
+    while true do
+        if isfile and isfile(joystickFilePath) then
+            local success, asset = pcall(function()
+                return getcustomasset(joystickFilePath)
+            end)
+            if success and asset then
+                Stick.Image = asset
+                Base.Image = asset
+                for _, dot in pairs(dots) do
+                    dot.Image = asset
+                end
+                break
+            end
+        end
+        task.wait(0.5)
+    end
+end)
+
+local JumpButton = Instance.new("ImageButton", ScreenGui)
 JumpButton.Name = "CustomJumpButton"
 JumpButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 JumpButton.BackgroundTransparency = 0.5
 JumpButton.Position = UDim2.new(1, -95, 1, -95)
 JumpButton.Size = UDim2.new(0, 70, 0, 70)
-JumpButton.Text = ""
 JumpButton.ZIndex = 10
 Instance.new("UICorner", JumpButton).CornerRadius = UDim.new(1, 0)
 
@@ -107,14 +140,28 @@ Stem.Position = UDim2.new(0.5, 0, 0.6, 0)
 Stem.AnchorPoint = Vector2.new(0.5, 0)
 Stem.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 
--- Исправленный прыжок: добавлена строгая проверка на текущее состояние
+task.spawn(function()
+    while true do
+        if isfile and isfile(imageFilePath) then
+            local success, asset = pcall(function()
+                return getcustomasset(imageFilePath)
+            end)
+            if success and asset then
+                JumpButton.Image = asset
+                ArrowIcon.Visible = false
+                break
+            end
+        end
+        task.wait(0.5)
+    end
+end)
+
 local function doJump()
     local char = Player.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum and hum.FloorMaterial ~= Enum.Material.Air then
             local currentState = hum:GetState()
-            -- Проверяем, что персонаж не находится уже в процессе прыжка или падения
             if currentState ~= Enum.HumanoidStateType.Jumping and currentState ~= Enum.HumanoidStateType.Freefall then
                 hum:ChangeState(Enum.HumanoidStateType.Jumping)
             end
@@ -142,25 +189,30 @@ end
 JumpButton.MouseButton1Down:Connect(function()
     if not isEnabled then return end
     JumpButton.BackgroundTransparency = 0.3
+    JumpButton.ImageColor3 = Color3.fromRGB(180, 180, 180)
     onJumpStart()
 end)
 
 JumpButton.MouseButton1Up:Connect(function()
     JumpButton.BackgroundTransparency = 0.5
+    JumpButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
     onJumpEnd()
 end)
 
-JumpButton.MouseLeave:Connect(onJumpEnd)
+JumpButton.MouseLeave:Connect(function()
+    JumpButton.BackgroundTransparency = 0.5
+    JumpButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    onJumpEnd()
+end)
 
--- Восстановление стандартного управления при отключении
 local function setStandardControls(visible)
     pcall(function()
         local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
         if touchGui then
             touchGui.Enabled = visible
-            -- Дополнительно принудительно возвращаем видимость элементам Roblox
             local frame = touchGui:FindFirstChild("TouchControlFrame")
             if frame then
+                frame.Visible = visible
                 local jump = frame:FindFirstChild("JumpButton")
                 if jump then jump.Visible = visible end
                 local stick = frame:FindFirstChild("DynamicThumbstick")
@@ -175,7 +227,6 @@ local function toggleSystem(state)
     isEnabled = state
     ScreenGui.Enabled = state
     saveSetting(state)
-    -- При отключении возвращаем стандартное управление и делаем кнопки видимыми
     if not state then
         setStandardControls(true)
     end
@@ -249,8 +300,25 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
+Stick.InputBegan:Connect(function(input)
+    if isEnabled and Stick.Image ~= "" and not dragging then
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            Stick.BackgroundTransparency = 0.3
+            Stick.ImageColor3 = Color3.fromRGB(180, 180, 180)
+        end
+    end
+end)
+
+Stick.InputEnded:Connect(function(input)
+    if Stick.Image ~= "" then
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            Stick.BackgroundTransparency = 0.5
+            Stick.ImageColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end
+end)
+
 RunService.RenderStepped:Connect(function()
-    -- Убиваем стандартное управление только когда включён
     if isEnabled then
         pcall(function()
             local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
@@ -258,6 +326,7 @@ RunService.RenderStepped:Connect(function()
                 touchGui.Enabled = false
                 local frame = touchGui:FindFirstChild("TouchControlFrame")
                 if frame then
+                    frame.Visible = false
                     local jump = frame:FindFirstChild("JumpButton")
                     if jump then jump.Visible = false end
                     local stick = frame:FindFirstChild("DynamicThumbstick")
