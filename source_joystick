@@ -168,10 +168,13 @@ local function doJump()
     local char = Player.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.FloorMaterial ~= Enum.Material.Air then
+        if hum then
             local currentState = hum:GetState()
-            if currentState ~= Enum.HumanoidStateType.Jumping and currentState ~= Enum.HumanoidStateType.Freefall then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            -- Разрешаем прыжок, если мы на земле ИЛИ если мы карабкаемся по лестнице
+            if hum.FloorMaterial ~= Enum.Material.Air or currentState == Enum.HumanoidStateType.Climbing then
+                if currentState ~= Enum.HumanoidStateType.Jumping and currentState ~= Enum.HumanoidStateType.Freefall then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
             end
         end
     end
@@ -283,7 +286,7 @@ end
 
 CaptureArea.InputBegan:Connect(function(input)
     if not isSystemOn then return end
-    if dragging then return end
+    if dragging loop then return end
     if input.UserInputType ~= Enum.UserInputType.Touch
         and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 
