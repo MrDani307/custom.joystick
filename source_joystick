@@ -170,7 +170,6 @@ local function doJump()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then
             local currentState = hum:GetState()
-            -- Разрешаем прыжок, если мы на земле ИЛИ если мы карабкаемся по лестнице
             if hum.FloorMaterial ~= Enum.Material.Air or currentState == Enum.HumanoidStateType.Climbing then
                 if currentState ~= Enum.HumanoidStateType.Jumping and currentState ~= Enum.HumanoidStateType.Freefall then
                     hum:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -248,8 +247,6 @@ local function toggleSystem(state)
         moveVector = Vector3.new(0, 0, 0)
         CaptureArea.Active = true
     end
-end do
-    
 end
 
 Player.Chatted:Connect(function(msg)
@@ -286,7 +283,7 @@ end
 
 CaptureArea.InputBegan:Connect(function(input)
     if not isSystemOn then return end
-    if dragging loop then return end
+    if dragging then return end
     if input.UserInputType ~= Enum.UserInputType.Touch
         and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 
