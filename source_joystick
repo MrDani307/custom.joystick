@@ -1,10 +1,7 @@
 local Player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-
-local folderName = "joystick ID's"
-local placeId = game.PlaceId
-local filePath = folderName .. "/" .. placeId .. ".txt"
+local ContextActionService = game:GetService("ContextActionService")
 
 local imageFolderName = "Jump picture"
 local joystickFolderName = "Joystick picture"
@@ -14,23 +11,6 @@ if isfolder then
     if not isfolder(joystickFolderName) then makefolder(joystickFolderName) end
 end
 
-local function loadSetting()
-    if isfolder and isfile then
-        if not isfolder(folderName) then makefolder(folderName) end
-        if isfile(filePath) then
-            return readfile(filePath) == "true"
-        end
-    end
-    return true
-end
-
-local function saveSetting(state)
-    if writefile then
-        if not isfolder(folderName) then makefolder(folderName) end
-        writefile(filePath, tostring(state))
-    end
-end
-
 local function showNotification(text)
     local hint = Instance.new("Hint")
     hint.Text = text
@@ -38,7 +18,6 @@ local function showNotification(text)
     task.delay(2, function() hint:Destroy() end)
 end
 
-local clickBlockEnabled = loadSetting()
 local isSystemOn = true
 
 if Player.PlayerGui:FindFirstChild("BlackDynamicJoystick") then
@@ -50,7 +29,7 @@ ScreenGui.Name = "BlackDynamicJoystick"
 ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.DisplayOrder = -10
+ScreenGui.DisplayOrder = 10 
 ScreenGui.Enabled = isSystemOn
 
 local CaptureArea = Instance.new("Frame", ScreenGui)
@@ -58,7 +37,7 @@ CaptureArea.Name = "CaptureArea"
 CaptureArea.Size = UDim2.new(0.5, 0, 1, 0)
 CaptureArea.Position = UDim2.new(0, 0, 0, 0)
 CaptureArea.BackgroundTransparency = 1
-CaptureArea.Active = true
+CaptureArea.Active = false 
 CaptureArea.ZIndex = 1
 
 local Base = Instance.new("ImageLabel", ScreenGui)
@@ -125,9 +104,9 @@ local JumpButton = Instance.new("ImageButton", ScreenGui)
 JumpButton.Name = "CustomJumpButton"
 JumpButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 JumpButton.BackgroundTransparency = 0.5
-JumpButton.Position = UDim2.new(1, -95, 1, -95)
+JumpButton.Position = UDim2.new(1, -95, 1, -89)
 JumpButton.Size = UDim2.new(0, 70, 0, 70)
-JumpButton.ZIndex = 10
+JumpButton.ZIndex = 1
 Instance.new("UICorner", JumpButton).CornerRadius = UDim.new(1, 0)
 
 local ArrowIcon = Instance.new("Frame", JumpButton)
@@ -141,11 +120,13 @@ Tip.Position = UDim2.new(0.5, 0, 0.35, 0)
 Tip.AnchorPoint = Vector2.new(0.5, 0.5)
 Tip.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 Tip.Rotation = 45
+Tip.ZIndex = 101
 local Stem = Instance.new("Frame", ArrowIcon)
 Stem.Size = UDim2.new(0, 12, 0, 14)
 Stem.Position = UDim2.new(0.5, 0, 0.6, 0)
 Stem.AnchorPoint = Vector2.new(0.5, 0)
 Stem.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Stem.ZIndex = 101
 
 task.spawn(function()
     while true do
@@ -245,7 +226,6 @@ local function toggleSystem(state)
         Stick.Visible = false
         for _, d in pairs(dots) do d.Visible = false end
         moveVector = Vector3.new(0, 0, 0)
-        CaptureArea.Active = true
     end
 end
 
@@ -255,12 +235,6 @@ Player.Chatted:Connect(function(msg)
         toggleSystem(true)
     elseif m == "off" then
         toggleSystem(false)
-    elseif m == "wer" then
-        clickBlockEnabled = true
-        saveSetting(true)
-    elseif m == "rew" then
-        clickBlockEnabled = false
-        saveSetting(false)
     end
 end)
 
@@ -281,62 +255,46 @@ local function updateJoystickVisuals(currentPos, diff)
     moveVector = Vector3.new(direction.X, 0, direction.Y)
 end
 
-CaptureArea.InputBegan:Connect(function(input)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not isSystemOn then return end
     if dragging then return end
-    if input.UserInputType ~= Enum.UserInputType.Touch
-        and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    
+    local screenSize = ScreenGui.AbsoluteSize
+    if input.Position.X > (screenSize.X / 2) then return end
 
     dragging = true
     movedOnce = false
     inputObject = input
     startPos = Vector2.new(input.Position.X, input.Position.Y)
-
-    if not clickBlockEnabled then
-        Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
-        Stick.Position = UDim2.new(0, startPos.X - 22.5, 0, startPos.Y - 22.5)
-        Base.Visible = true
-        Stick.Visible = true
-        for _, d in pairs(dots) do
-            d.Position = UDim2.new(0, startPos.X - (d.Size.X.Offset/2), 0, startPos.Y - (d.Size.Y.Offset/2))
-            d.Visible = true
-        end
-    end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(function(input, gameProcessed)
     if isSystemOn and dragging and input == inputObject then
         local currentPos = Vector2.new(input.Position.X, input.Position.Y)
         local diff = currentPos - startPos
 
-        if clickBlockEnabled then
-            if not movedOnce and diff.Magnitude > 10 then
-                movedOnce = true
-                CaptureArea.Active = false
-                Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
-                Base.Visible = true
-                Stick.Visible = true
-                for _, d in pairs(dots) do
-                    d.Position = UDim2.new(0, startPos.X - (d.Size.X.Offset/2), 0, startPos.Y - (d.Size.Y.Offset/2))
-                    d.Visible = true
-                end
+        if not movedOnce and diff.Magnitude > 15 then
+            movedOnce = true
+            
+            setStandardControls(false)
+            
+            Base.Position = UDim2.new(0, startPos.X - 20, 0, startPos.Y - 20)
+            Base.Visible = true
+            Stick.Visible = true
+            for _, d in pairs(dots) do
+                d.Position = UDim2.new(0, startPos.X - (d.Size.X.Offset/2), 0, startPos.Y - (d.Size.Y.Offset/2))
+                d.Visible = true
             end
-            if movedOnce and diff.Magnitude > 0 then
-                updateJoystickVisuals(currentPos, diff)
-            end
-        else
-            if not movedOnce and diff.Magnitude > 2 then
-                movedOnce = true
-                CaptureArea.Active = false
-            end
-            if diff.Magnitude > 0 then
-                updateJoystickVisuals(currentPos, diff)
-            end
+        end
+        
+        if movedOnce and diff.Magnitude > 0 then
+            updateJoystickVisuals(currentPos, diff)
         end
     end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if input == inputObject then
         dragging = false
         movedOnce = false
@@ -345,12 +303,13 @@ UserInputService.InputEnded:Connect(function(input)
         Stick.Visible = false
         for _, d in pairs(dots) do d.Visible = false end
         moveVector = Vector3.new(0, 0, 0)
-        CaptureArea.Active = true
+        
+        setStandardControls(true)
     end
 end)
 
 Stick.InputBegan:Connect(function(input)
-    if isSystemOn and Stick.Image ~= "" and dragging and (not clickBlockEnabled or movedOnce) then
+    if isSystemOn and Stick.Image ~= "" and dragging and movedOnce then
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             Stick.BackgroundTransparency = 0.3
             Stick.ImageColor3 = Color3.fromRGB(180, 180, 180)
@@ -367,35 +326,26 @@ Stick.InputEnded:Connect(function(input)
     end
 end)
 
+local function sinkJoystickTouch(actionName, inputState, input)
+    if isSystemOn and dragging and movedOnce and inputObject and input == inputObject then
+        return Enum.ContextActionResult.Sink
+    end
+    return Enum.ContextActionResult.Pass
+end
+
+ContextActionService:BindActionAtPriority(
+    "CustomJoystickSink",
+    sinkJoystickTouch,
+    false,
+    Enum.ContextActionPriority.High.Value + 10,
+    Enum.UserInputType.Touch,
+    Enum.UserInputType.MouseButton1
+)
+
 RunService.RenderStepped:Connect(function()
     if isSystemOn then
-        pcall(function()
-            local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
-            if touchGui then
-                touchGui.Enabled = false
-                local frame = touchGui:FindFirstChild("TouchControlFrame")
-                if frame then
-                    frame.Visible = false
-                    local jump = frame:FindFirstChild("JumpButton")
-                    if jump then jump.Visible = false end
-                    local stick = frame:FindFirstChild("DynamicThumbstick")
-                    if stick then stick.Visible = false end
-                end
-            end
-        end)
-
         if Player.Character and Player.Character:FindFirstChild("Humanoid") then
             Player.Character.Humanoid:Move(moveVector, true)
         end
-    end
-end)
-
-task.spawn(function()
-    task.wait(1)
-    if isSystemOn then
-        pcall(function()
-            local touchGui = Player.PlayerGui:FindFirstChild("TouchGui")
-            if touchGui then touchGui.Enabled = false end
-        end)
     end
 end)
